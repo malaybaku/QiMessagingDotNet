@@ -4,6 +4,22 @@ using Newtonsoft.Json.Linq;
 
 namespace Baku.QiMessaging
 {
+    /// <summary>送信データを表します。</summary>
+    public class QiSessionDataSendEventArgs : EventArgs
+    {
+        public QiSessionDataSendEventArgs(int id, JObject data)
+        {
+            Id = id;
+            Data = data;
+        }
+
+        /// <summary>対応するポストを一意に指定するId</summary>
+        public int Id { get; }
+
+        /// <summary>リモートへ送信したJSONデータの全体</summary>
+        public JObject Data { get; }
+    }
+
     /// <summary>"reply"の受信データを表します。</summary>
     public class QiSessionReplyEventArgs : EventArgs
     {

@@ -1,4 +1,7 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.IO;
+using System.Threading.Tasks;
+
 using Baku.QiMessaging;
 
 namespace HelloWorld
@@ -10,11 +13,20 @@ namespace HelloWorld
             string host = "http://pepper1.local";
             Task.Run(async () =>
             {
-                using (var session = new QiSession(host))
+                try
                 {
-                    var tts = await session.LoadService("ALTextToSpeech");
-                    await tts.Invoke("setLanguage", "English");
-                    await tts.Invoke("say", "Hello.");
+                    using (var rawSession = new QiSession(host))
+                    using (var writer = new StreamWriter("socket_datas.txt"))
+                    using (var session = new LoggingQiSession(rawSession, writer))
+                    {
+                        var tts = await session.LoadService("ALTextToSpeech");
+                        await tts.Invoke("setLanguage", "English");
+                        await tts.Invoke("say", "Hello.");
+                    }
+                }
+                catch(Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
                 }
             }).Wait();
         }

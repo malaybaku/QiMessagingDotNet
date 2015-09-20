@@ -9,7 +9,7 @@ using Newtonsoft.Json.Linq;
 namespace Baku.QiMessaging
 {
 
-    /// <summary>拾ってきた型データをそれっぽく格納し直したクラス</summary>
+    /// <summary>QiMessageで送られてくるメソッド/シグナル情報を格納し直したクラス</summary>
     public class QiServiceModule
     {
         private QiServiceModule(

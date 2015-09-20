@@ -11,7 +11,7 @@ namespace Baku.QiMessaging
 {
 
     /// <summary>JavascriptのQiSessionに相当する機能を提供するクラスを表します。</summary>
-    public class QiSession : IDisposable
+    public class QiSession : IQiSession
     {
         /// <summary>
         /// 指定された接続先を用いてセッションを初期化します。
@@ -23,30 +23,15 @@ namespace Baku.QiMessaging
             HostName = host;
 
             _socket = IO.Socket(host);
-            //TODO:データの型については未検証なことに注意。JSONが飛んでくれるとは限らない
-            _socket.On("reply", data => OnReply((JObject)data));
-            _socket.On("error", data => OnError((JObject)data));
-            _socket.On("signal", data => OnSignal((JObject)data));
-            _socket.On("disconnect", data => OnDisconnect((JObject)data));
+            InitializeSocket();
             _socket.Connect();
-
-            _dumpLogWriter = new System.IO.StreamWriter("received_json.log");
         }
 
         /// <summary>通信先を表すホスト名を取得します。</summary>
         public string HostName { get; }
 
-        private static object publishPostIdLock = new Object();
-        /// <summary>通信に使える一意識別子となる整数を発行します。</summary>
-        /// <returns>一意識別子になる整数</returns>
-        public int PublishPostId()
-        {
-            lock(publishPostIdLock)
-            {
-                TotalId++;
-                return TotalId;
-            }
-        }
+        /// <summary>オブジェクトが破棄済みであるかどうかを取得します。</summary>
+        public bool IsDisposed { get; private set; }
 
         /// <summary>モジュール名を指定してモジュールをロードします。</summary>
         /// <param name="serviceName">モジュール名</param>
@@ -54,6 +39,8 @@ namespace Baku.QiMessaging
         /// <returns>ロードされたモジュール</returns>
         public async Task<QiServiceModule> LoadService(string serviceName, params object[] args)
         {
+            if (IsDisposed) throw new ObjectDisposedException(nameof(QiSession));
+
             int id = PublishPostId();
             QiServiceModule result = null;
             JToken errorData = new JObject();
@@ -66,8 +53,7 @@ namespace Baku.QiMessaging
 
             //コードの通りだが、成功と失敗のイベントを監視しつつ通信を試す
             using (var _ = Observable.FromEventPattern<QiSessionReplyEventArgs>(this, nameof(ReplyReceived))
-                .Where(ep => ep.EventArgs.Id == id)
-                .Take(1)
+                .FirstAsync(ep => ep.EventArgs.Id == id)
                 .Subscribe(ep =>
                 {
                     success = true;
@@ -75,8 +61,7 @@ namespace Baku.QiMessaging
                     cts.Cancel();
                 }))
             using (var __ = Observable.FromEventPattern<QiSessionReplyEventArgs>(this, nameof(ErrorReceived))
-                .Where(ep => ep.EventArgs.Id == id)
-                .Take(1)
+                .FirstAsync(ep => ep.EventArgs.Id == id)
                 .Subscribe(ep =>
                 {
                     success = false;
@@ -120,6 +105,8 @@ namespace Baku.QiMessaging
         /// <returns>関数の戻り値</returns>
         public async Task<JToken> CallFunction(string objName, string methodName, JArray arg)
         {
+            if (IsDisposed) throw new ObjectDisposedException(nameof(QiSession));
+
             int id = PublishPostId();
             JToken result = new JObject();
             JToken errorData = new JObject();
@@ -204,11 +191,17 @@ namespace Baku.QiMessaging
         }
 
         /// <summary>リソースを解放します。</summary>
-        public void Dispose()
+        public void Dispose() 
         {
-            _socket.Disconnect();
-            _dumpLogWriter.Dispose();
+            if(!IsDisposed)
+            {
+                _socket.Disconnect();
+                IsDisposed = true;
+            }
         }
+
+        /// <summary>サーバへ"call"データを送信すると発生します。</summary>
+        public event EventHandler<QiSessionDataSendEventArgs> DataSend;
 
         /// <summary>サーバから"reply"データを取得すると発生します。</summary>
         public event EventHandler<QiSessionReplyEventArgs> ReplyReceived;
@@ -225,45 +218,7 @@ namespace Baku.QiMessaging
         #region プライベート実装
 
         private Socket _socket;
-        private System.IO.StreamWriter _dumpLogWriter;
-        private static int TotalId = 0;
-
-        private void OnReply(JObject data)
-        {
-            _dumpLogWriter.WriteLine("reply");
-            _dumpLogWriter.WriteLine(data);
-
-            ReplyReceived?.Invoke(this, new QiSessionReplyEventArgs(data));
-        }
-
-        private void OnError(JObject data)
-        {
-            _dumpLogWriter.WriteLine("error");
-
-            ErrorReceived?.Invoke(this, new QiSessionErrorEventArgs(data));
-        }
-
-        private void OnSignal(JObject data)
-        {
-            _dumpLogWriter.WriteLine("signal");
-            _dumpLogWriter.WriteLine(data);
-
-            //データの中身は文字列+イベントデータなのでそのまま拾って投げる
-            var res = data["result"];
-            SignalReceived?.Invoke(this, new QiSessionSignalEventArgs(
-                (string)((res["obj"] as JValue).Value),
-                (string)((res["signal"] as JValue).Value),
-                (string)((res["link"] as JValue).Value),
-                res["data"]
-                ));
-
-        }
-
-        private void OnDisconnect(JObject data)
-        {
-            _dumpLogWriter.WriteLine("disconnect");
-            Disconnected?.Invoke(this, EventArgs.Empty);
-        }
+        private int TotalId = 0;
 
         /// <summary>送信元の名前、関数名、引数を指定してサーバへソケットデータを送信します。</summary>
         /// <param name="obj">送信元オブジェクトの名前</param>
@@ -272,8 +227,6 @@ namespace Baku.QiMessaging
         /// <returns>投げた通信に対応する一意ID</returns>
         private void Post(int id, string obj, string method, JArray arg)
         {
-            TotalId++;
-
             var jobj = new JObject(
                 new JProperty("idm", id),
                 new JProperty("params",
@@ -286,6 +239,42 @@ namespace Baku.QiMessaging
                 );
 
             _socket.Emit("call", jobj);
+
+            DataSend?.Invoke(this, new QiSessionDataSendEventArgs(id, jobj));
+        }
+
+        /// <summary>ソケットのデータ受信方法を初期化します。</summary>
+        private void InitializeSocket()
+        {
+            _socket.On("reply", data => ReplyReceived?.Invoke(this, new QiSessionReplyEventArgs((JObject)data)));
+
+            _socket.On("error", data => ErrorReceived?.Invoke(this, new QiSessionErrorEventArgs((JObject)data)));
+
+            _socket.On("disconnect", data => Disconnected?.Invoke(this, EventArgs.Empty));
+
+            _socket.On("signal", data =>
+            {
+                //データの中身は文字列+イベントデータなのでそのまま拾って投げる
+                var res = (data as JObject)["result"];
+                SignalReceived?.Invoke(this, new QiSessionSignalEventArgs(
+                    (string)((res["obj"] as JValue).Value),
+                    (string)((res["signal"] as JValue).Value),
+                    (string)((res["link"] as JValue).Value),
+                    res["data"]
+                    ));
+            });
+        }
+
+        private object publishPostIdLock = new Object();
+        /// <summary>通信に使える一意識別子となる整数を発行します。</summary>
+        /// <returns>一意識別子になる整数</returns>
+        private int PublishPostId()
+        {
+            lock (publishPostIdLock)
+            {
+                TotalId++;
+                return TotalId;
+            }
         }
 
         #endregion
