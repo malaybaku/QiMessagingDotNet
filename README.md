@@ -61,21 +61,25 @@ Source code is opened with MIT License as written in "LICENSE.txt". Also see "Th
 ### 4. Third Party Libraries/使用している第三者ライブラリ
 
 #### 4-1. SocketIoClientDotNet
-web page(NuGet): https://www.nuget.org/packages/SocketIoClientDotNet/
-web page(GitHub): https://github.com/Quobject/SocketIoClientDotNet
-license(MIT): https://github.com/Quobject/SocketIoClientDotNet/blob/master/LICENSE.md
+
+- web page(NuGet): https://www.nuget.org/packages/SocketIoClientDotNet/
+- web page(GitHub): https://github.com/Quobject/SocketIoClientDotNet
+- license(MIT): https://github.com/Quobject/SocketIoClientDotNet/blob/master/LICENSE.md
 
 #### 4-2. EngineIoClientDotNet
-web page(GitHub): https://github.com/Quobject/EngineIoClientDotNet
-license(MIT): https://github.com/Quobject/EngineIoClientDotNet/blob/master/LICENSE
+
+- web page(GitHub): https://github.com/Quobject/EngineIoClientDotNet
+- license(MIT): https://github.com/Quobject/EngineIoClientDotNet/blob/master/LICENSE
 
 #### 4-3. WebSocket4Net
-web page(CodePlex): https://websocket4net.codeplex.com/
-license(Apache 2.0): https://websocket4net.codeplex.com/license
+
+- web page(CodePlex): https://websocket4net.codeplex.com/
+- license(Apache 2.0): https://websocket4net.codeplex.com/license
 
 #### 4-4. Newtonsoft.Json
-web page(NuGet): https://www.nuget.org/packages/Newtonsoft.Json/
-license(MIT): https://raw.githubusercontent.com/JamesNK/Newtonsoft.Json/master/LICENSE.md
+
+- web page(NuGet): https://www.nuget.org/packages/Newtonsoft.Json/
+- license(MIT): https://raw.githubusercontent.com/JamesNK/Newtonsoft.Json/master/LICENSE.md
 
 
 
